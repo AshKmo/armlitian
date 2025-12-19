@@ -338,6 +338,10 @@ namespace Armlitian {
 			public string ToAssembly();
 		}
 
+		public interface ShortMemoryLocation : MemoryLocation {
+			new public string ToAssembly();
+		}
+
 		public class SpecialConstant : ConstantValue, MemoryLocation {
 			public static SpecialConstant WriteSignedNum = new SpecialConstant(".WriteSignedNum");
 			public static SpecialConstant WriteChar = new SpecialConstant(".WriteChar");
@@ -359,7 +363,7 @@ namespace Armlitian {
 			}
 		}
 
-		public class IndexedMemoryLocation : MemoryLocation {
+		public class IndexedMemoryLocation : ShortMemoryLocation {
 			public Register A;
 
 			public ConstantValue? ConstB = null;
@@ -440,7 +444,7 @@ namespace Armlitian {
 			R0
 		}
 
-		public class Register : Value {
+		public class Register : Value, ShortMemoryLocation {
 			public static Register PC = new Register(RegisterType.PC);
 			public static Register LR = new Register(RegisterType.LR);
 			public static Register SP = new Register(RegisterType.SP);
@@ -472,6 +476,10 @@ namespace Armlitian {
 				}
 
 				return name;
+			}
+
+			string ShortMemoryLocation.ToAssembly() {
+				return $"[{ToAssembly()}]";
 			}
 		}
 
@@ -557,9 +565,9 @@ namespace Armlitian {
 
 		public class LDR : Instruction {
 			public Register Register;
-			public MemoryLocation MemoryLocation;
+			public ShortMemoryLocation MemoryLocation;
 
-			public LDR(Register register, MemoryLocation memoryLocation) {
+			public LDR(Register register, ShortMemoryLocation memoryLocation) {
 				Register = register;
 				MemoryLocation = memoryLocation;
 			}
@@ -571,9 +579,9 @@ namespace Armlitian {
 
 		public class LDRB : Instruction {
 			public Register Register;
-			public MemoryLocation MemoryLocation;
+			public ShortMemoryLocation MemoryLocation;
 
-			public LDRB(Register register, MemoryLocation memoryLocation) {
+			public LDRB(Register register, ShortMemoryLocation memoryLocation) {
 				Register = register;
 				MemoryLocation = memoryLocation;
 			}
@@ -585,9 +593,9 @@ namespace Armlitian {
 
 		public class STR : Instruction {
 			public Register Register;
-			public MemoryLocation MemoryLocation;
+			public ShortMemoryLocation MemoryLocation;
 
-			public STR(Register register, MemoryLocation memoryLocation) {
+			public STR(Register register, ShortMemoryLocation memoryLocation) {
 				Register = register;
 				MemoryLocation = memoryLocation;
 			}
@@ -599,9 +607,9 @@ namespace Armlitian {
 
 		public class STRB : Instruction {
 			public Register Register;
-			public MemoryLocation MemoryLocation;
+			public ShortMemoryLocation MemoryLocation;
 
-			public STRB(Register register, MemoryLocation memoryLocation) {
+			public STRB(Register register, ShortMemoryLocation memoryLocation) {
 				Register = register;
 				MemoryLocation = memoryLocation;
 			}
@@ -1018,7 +1026,8 @@ namespace Armlitian {
 										program.Add(new Assembly.BL(genericSubroutines.Copy));
 									}
 
-									program.Add(new Assembly.LDR(Assembly.Register.LR, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(f.ReturnType.Size))));
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(f.ReturnType.Size)));
+									program.Add(new Assembly.LDR(Assembly.Register.LR, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 									program.Add(new Assembly.RET());
 
 									return (program, data, types["void"]);
@@ -1046,10 +1055,12 @@ namespace Armlitian {
 									program = program.Concat(subProgramVar).ToList();
 									data = data.Concat(subDataVar).ToList();
 
-									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(varLocPosition))));
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(varLocPosition)));
+									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 
 									if (valueTypeVal is IntType || valueTypeVal is PtrType) {
-										program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+										program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+										program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 										program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.R1)));
 									} else {
 										program.Add(new Assembly.ADD(Assembly.Register.R0, Assembly.Register.SP, new Assembly.ConstInt(memoryStart)));
@@ -1079,7 +1090,8 @@ namespace Armlitian {
 											program = program.Concat(subProgramCond).ToList();
 											data = data.Concat(subDataCond).ToList();
 
-											program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+											program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+											program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 											program.Add(new Assembly.CMP(Assembly.Register.R0, new Assembly.ConstInt(0)));
 											program.Add(new Assembly.BEQ(skip));
 										}
@@ -1117,7 +1129,8 @@ namespace Armlitian {
 									program = program.Concat(subProgramCond).ToList();
 									data = data.Concat(subDataCond).ToList();
 
-									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 									program.Add(new Assembly.CMP(Assembly.Register.R0, new Assembly.ConstInt(0)));
 									program.Add(new Assembly.BEQ(skip));
 
@@ -1137,15 +1150,19 @@ namespace Armlitian {
 									program = program.Concat(subProgram).ToList();
 									data = data.Concat(subData).ToList();
 
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+
 									switch (valueType) {
 										case IntType intType:
-											program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
-											program.Add(new Assembly.STR(Assembly.Register.R0, Assembly.SpecialConstant.WriteSignedNum));
+											program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
+											program.Add(new Assembly.MOV(Assembly.Register.R1, Assembly.SpecialConstant.WriteSignedNum));
+											program.Add(new Assembly.STR(Assembly.Register.R0, Assembly.Register.R1));
 											break;
 
 										case CharType charType:
-											program.Add(new Assembly.LDRB(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
-											program.Add(new Assembly.STRB(Assembly.Register.R0, Assembly.SpecialConstant.WriteChar));
+											program.Add(new Assembly.LDRB(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
+											program.Add(new Assembly.MOV(Assembly.Register.R1, Assembly.SpecialConstant.WriteChar));
+											program.Add(new Assembly.STRB(Assembly.Register.R0, Assembly.Register.R1));
 											break;
 
 										case ArrayType arrType:
@@ -1155,7 +1172,8 @@ namespace Armlitian {
 												}
 
 												program.Add(new Assembly.ADD(Assembly.Register.R0, Assembly.Register.SP, new Assembly.ConstInt(memoryStart)));
-												program.Add(new Assembly.STR(Assembly.Register.R0, Assembly.SpecialConstant.WriteString));
+												program.Add(new Assembly.MOV(Assembly.Register.R1, Assembly.SpecialConstant.WriteString));
+												program.Add(new Assembly.STR(Assembly.Register.R0, Assembly.Register.R1));
 											}
 											break;
 
@@ -1165,8 +1183,9 @@ namespace Armlitian {
 													throw new Exception("cannot print pointers apart from char pointers");
 												}
 
-												program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
-												program.Add(new Assembly.STR(Assembly.Register.R0, Assembly.SpecialConstant.WriteString));
+												program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
+												program.Add(new Assembly.MOV(Assembly.Register.R1, Assembly.SpecialConstant.WriteString));
+												program.Add(new Assembly.STR(Assembly.Register.R0, Assembly.Register.R1));
 											}
 											break;
 
@@ -1217,9 +1236,11 @@ namespace Armlitian {
 									Assembly.Label repeatLabel = new();
 									Assembly.Label endLabel = new();
 
-									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
-									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart + 4))));
-									program.Add(new Assembly.MOV(Assembly.Register.R2, new Assembly.ConstInt(ptrType.ValueType.Size)));
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
+									program.Add(new Assembly.ADD(Assembly.Register.R11, Assembly.Register.R12, new Assembly.ConstInt(4)));
+									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R11)));
+									program.Add(new Assembly.MOV(Assembly.Register.R2, new Assembly.ConstInt(opName == "@" ? ptrType.ValueType.Size : ((ArrayType)ptrType.ValueType).ItemType.Size)));
 									program.Add(repeatLabel);
 									program.Add(new Assembly.CMP(Assembly.Register.R2, new Assembly.ConstInt(0)));
 									program.Add(new Assembly.BEQ(endLabel));
@@ -1227,7 +1248,7 @@ namespace Armlitian {
 									program.Add(new Assembly.SUB(Assembly.Register.R2, Assembly.Register.R2, new Assembly.ConstInt(1)));
 									program.Add(new Assembly.B(repeatLabel));
 									program.Add(endLabel);
-									program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 
 									if (opName == "@@") {
 										if (ptrType.ValueType is not ArrayType arrType) {
@@ -1259,19 +1280,25 @@ namespace Armlitian {
 									program = program.Concat(subProgramCond).ToList();
 									data = data.Concat(subDataCond).ToList();
 
+									Assembly.Label isTrue = new();
 									Assembly.Label isFalse = new();
 
-									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 									program.Add(new Assembly.CMP(Assembly.Register.R0, new Assembly.ConstInt(0)));
 									program.Add(new Assembly.BEQ(isFalse));
 
 									program = program.Concat(subProgramTrue).ToList();
 									data = data.Concat(subDataTrue).ToList();
 
+									program.Add(new Assembly.B(isTrue));
+
 									program.Add(isFalse);
 
 									program = program.Concat(subProgramFalse).ToList();
 									data = data.Concat(subDataFalse).ToList();
+
+									program.Add(isTrue);
 
 									return (program, data, valueTypeTrue);
 								}
@@ -1309,9 +1336,10 @@ namespace Armlitian {
 										throw new Exception("idiot");
 									}
 
-									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 									program.Add(new Assembly.ADD(Assembly.Register.R0, Assembly.Register.R0, new Assembly.ConstInt(position)));
-									program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 
 									return (program, data, ((Field)structField).Type);
 								}
@@ -1327,7 +1355,8 @@ namespace Armlitian {
 									program = program.Concat(subProgram).ToList();
 									data = data.Concat(subData).ToList();
 
-									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 									program.Add(new Assembly.ADD(Assembly.Register.R1, Assembly.Register.SP, new Assembly.ConstInt(memoryStart)));
 									program.Add(new Assembly.MOV(Assembly.Register.R2, new Assembly.ConstInt(ptrType.ValueType.Size)));
 									program.Add(new Assembly.BL(genericSubroutines.Copy));
@@ -1359,12 +1388,14 @@ namespace Armlitian {
 
 									program.Add(add);
 
-									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
-									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart + 4))));
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
+									program.Add(new Assembly.ADD(Assembly.Register.R11, Assembly.Register.R12, new Assembly.ConstInt(4)));
+									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R11)));
 
 									program.Add(new Assembly.ADD(Assembly.Register.R0, Assembly.Register.R0, Assembly.Register.R1));
 
-									program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 
 									program.Add(new Assembly.RET());
 
@@ -1396,13 +1427,15 @@ namespace Armlitian {
 									program.Add(new Assembly.B(allCompleted));
 
 									program.Add(sub);
-
-									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
-									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart + 4))));
+									
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
+									program.Add(new Assembly.ADD(Assembly.Register.R11, Assembly.Register.R12, new Assembly.ConstInt(4)));
+									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R11)));
 
 									program.Add(new Assembly.SUB(Assembly.Register.R0, Assembly.Register.R0, Assembly.Register.R1));
 
-									program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 
 									program.Add(new Assembly.RET());
 
@@ -1438,9 +1471,11 @@ namespace Armlitian {
 
 										program.Add(multiply);
 
+										program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
 										program.Add(new Assembly.MOV(Assembly.Register.R2, new Assembly.ConstInt(0)));
-										program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
-										program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart + 4))));
+										program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
+										program.Add(new Assembly.ADD(Assembly.Register.R11, Assembly.Register.R12, new Assembly.ConstInt(4)));
+										program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R11)));
 
 										Assembly.Label skipSignSwap = new();
 										Assembly.Label done = new();
@@ -1461,7 +1496,7 @@ namespace Armlitian {
 										program.Add(new Assembly.B(repeat));
 										program.Add(done);
 
-										program.Add(new Assembly.STR(Assembly.Register.R2, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+										program.Add(new Assembly.STR(Assembly.Register.R2, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 
 										if (listEl.Content.Count > 3) {
 											program.Add(new Assembly.RET());
@@ -1494,8 +1529,10 @@ namespace Armlitian {
 
 									Assembly.Label skipFalse = new();
 
-									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
-									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart + 4))));
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+									program.Add(new Assembly.ADD(Assembly.Register.R11, Assembly.Register.R12, new Assembly.ConstInt(4)));
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
+									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R11)));
 
 									program.Add(new Assembly.CMP(Assembly.Register.R0, Assembly.Register.R1));
 
@@ -1514,7 +1551,7 @@ namespace Armlitian {
 									program.Add(new Assembly.MOV(Assembly.Register.R2, new Assembly.ConstInt(0)));
 									program.Add(skipFalse);
 
-									program.Add(new Assembly.STR(Assembly.Register.R2, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.STR(Assembly.Register.R2, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 
 									return (program, data, types["int"]);
 								}
@@ -1535,7 +1572,8 @@ namespace Armlitian {
 
 									Assembly.Label skipB = new();
 
-									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 									program.Add(new Assembly.CMP(Assembly.Register.R0, new Assembly.ConstInt(0)));
 									program.Add(opName == "&&" ? new Assembly.BEQ(skipB) : new Assembly.BNE(skipB));
 
@@ -1555,8 +1593,9 @@ namespace Armlitian {
 										throw new Exception("failed to resolve type in sizeof");
 									}
 
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
 									program.Add(new Assembly.MOV(Assembly.Register.R0, new Assembly.ConstInt(type.Size)));
-									program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 
 									return (program, data, types["int"]);
 								}
@@ -1566,7 +1605,8 @@ namespace Armlitian {
 									var (_, _, type) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[1], memoryStart);
 
 									program.Add(new Assembly.MOV(Assembly.Register.R0, new Assembly.ConstInt(type.Size)));
-									program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+									program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 
 									return (program, data, types["int"]);
 								}
@@ -1584,13 +1624,15 @@ namespace Armlitian {
 
 									Assembly.Label skipTrue = new();
 
-									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 									program.Add(new Assembly.MOV(Assembly.Register.R1, new Assembly.ConstInt(1)));
 									program.Add(new Assembly.CMP(Assembly.Register.R0, new Assembly.ConstInt(0)));
 									program.Add(new Assembly.BEQ(skipTrue));
 									program.Add(new Assembly.MOV(Assembly.Register.R1, new Assembly.ConstInt(0)));
 									program.Add(skipTrue);
-									program.Add(new Assembly.STR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+									program.Add(new Assembly.STR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 
 									return (program, data, types["int"]);
 								}
@@ -1613,8 +1655,10 @@ namespace Armlitian {
 									program = program.Concat(subProgramB).ToList();
 									data = data.Concat(subDataB).ToList();
 
-									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
-									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart + 4))));
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
+									program.Add(new Assembly.ADD(Assembly.Register.R11, Assembly.Register.R12, new Assembly.ConstInt(4)));
+									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R11)));
 
 									switch (opName) {
 										case "&":
@@ -1628,7 +1672,8 @@ namespace Armlitian {
 											break;
 									}
 
-									program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+									program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 
 									return (program, data, types["int"]);
 								}
@@ -1651,8 +1696,10 @@ namespace Armlitian {
 									program = program.Concat(subProgramB).ToList();
 									data = data.Concat(subDataB).ToList();
 
-									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
-									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart + 4))));
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
+									program.Add(new Assembly.ADD(Assembly.Register.R11, Assembly.Register.R12, new Assembly.ConstInt(4)));
+									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R11)));
 
 									if (opName == "<<") {
 										program.Add(new Assembly.LSL(Assembly.Register.R3, Assembly.Register.R0, Assembly.Register.R1));
@@ -1674,7 +1721,7 @@ namespace Armlitian {
 										}
 									}
 
-									program.Add(new Assembly.STR(Assembly.Register.R3, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.STR(Assembly.Register.R3, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 
 									return (program, data, types["int"]);
 								}
@@ -1703,16 +1750,19 @@ namespace Armlitian {
 										throw new Exception("cannot compare void types");
 									}
 
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+
 									if (valueTypeA.Size == 0) {
 										program.Add(new Assembly.MOV(Assembly.Register.R0, new Assembly.ConstInt(trueValue)));
-										program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+										program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 
 										return (program, data, types["int"]);
 									}
 
 									if (valueTypeA.Size == 4) {
-										program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
-										program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart + 4))));
+										program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
+										program.Add(new Assembly.ADD(Assembly.Register.R11, Assembly.Register.R12, new Assembly.ConstInt(4)));
+										program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R11)));
 										program.Add(new Assembly.CMP(Assembly.Register.R0, Assembly.Register.R1));
 
 										Assembly.Label skipFalse = new();
@@ -1721,7 +1771,7 @@ namespace Armlitian {
 										program.Add(new Assembly.BEQ(skipFalse));
 										program.Add(new Assembly.MOV(Assembly.Register.R2, new Assembly.ConstInt(falseValue)));
 										program.Add(skipFalse);
-										program.Add(new Assembly.STR(Assembly.Register.R2, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+										program.Add(new Assembly.STR(Assembly.Register.R2, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 
 										return (program, data, types["int"]);
 									}
@@ -1739,7 +1789,8 @@ namespace Armlitian {
 									program.Add(new Assembly.CMP(Assembly.Register.R3, new Assembly.ConstInt(0)));
 									program.Add(new Assembly.BEQ(exit));
 									program.Add(new Assembly.LDRB(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.R2)));
-									program.Add(new Assembly.LDRB(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.R2, new Assembly.ConstInt(SizeToWordBytes(valueTypeA.Size)))));
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(SizeToWordBytes(valueTypeA.Size))));
+									program.Add(new Assembly.LDRB(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.R2, Assembly.Register.R12)));
 									program.Add(new Assembly.CMP(Assembly.Register.R0, Assembly.Register.R1));
 									program.Add(new Assembly.BNE(isFalse));
 									program.Add(new Assembly.SUB(Assembly.Register.R3, Assembly.Register.R3, new Assembly.ConstInt(1)));
@@ -1751,7 +1802,8 @@ namespace Armlitian {
 
 									program.Add(exit);
 
-									program.Add(new Assembly.STR(Assembly.Register.R4, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+									program.Add(new Assembly.STR(Assembly.Register.R4, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 
 									return (program, data, types["int"]);
 								}
@@ -1773,8 +1825,10 @@ namespace Armlitian {
 									program = program.Concat(subProgramD).ToList();
 									data = data.Concat(subDataD).ToList();
 
-									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
-									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart + 4))));
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
+									program.Add(new Assembly.ADD(Assembly.Register.R11, Assembly.Register.R12, new Assembly.ConstInt(4)));
+									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R11)));
 
 									Assembly.Label skipSignSwapN = new();
 
@@ -1817,20 +1871,22 @@ namespace Armlitian {
 
 									Assembly.Label skipResultSignFlip = new();
 
+									program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+
 									if (opName == "/") {
 										program.Add(new Assembly.CMP(Assembly.Register.R3, new Assembly.ConstInt(0)));
 										program.Add(new Assembly.BEQ(skipResultSignFlip));
 										program.Add(new Assembly.MOV(Assembly.Register.R3, new Assembly.ConstInt(0)));
 										program.Add(new Assembly.SUB(Assembly.Register.R2, Assembly.Register.R3, Assembly.Register.R2));
 										program.Add(skipResultSignFlip);
-										program.Add(new Assembly.STR(Assembly.Register.R2, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+										program.Add(new Assembly.STR(Assembly.Register.R2, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 									} else {
 										program.Add(new Assembly.CMP(Assembly.Register.R3, new Assembly.ConstInt(0)));
 										program.Add(new Assembly.BEQ(skipResultSignFlip));
 										program.Add(new Assembly.MOV(Assembly.Register.R3, new Assembly.ConstInt(0)));
 										program.Add(new Assembly.SUB(Assembly.Register.R0, Assembly.Register.R3, Assembly.Register.R0));
 										program.Add(skipResultSignFlip);
-										program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+										program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 									}
 
 									return (program, data, types["int"]);
@@ -1880,7 +1936,8 @@ namespace Armlitian {
 
 				case IntElement intEl:
 					program.Add(new Assembly.MOV(Assembly.Register.R0, new Assembly.ConstInt(intEl.Content)));
-					program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+					program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+					program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 					return (program, data, types["int"]);
 
 				case WordElement wordEl:
@@ -1897,7 +1954,8 @@ namespace Armlitian {
 							}
 
 							program.Add(new Assembly.MOV(Assembly.Register.R0, c));
-							program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+							program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+							program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 
 							return (program, data, new PtrType(null, t));
 						}
@@ -1907,13 +1965,15 @@ namespace Armlitian {
 						program.Add(new Assembly.ADD(Assembly.Register.R0, Assembly.Register.SP, new Assembly.ConstInt(field.Position)));
 
 						if (wordEl.Content.StartsWith("$")) {
-							program.Add(new Assembly.ADD(Assembly.Register.R1, Assembly.Register.SP, new Assembly.ConstInt(memoryStart)));
+							program.Add(new Assembly.MOV(Assembly.Register.R3, new Assembly.ConstInt(memoryStart)));
+							program.Add(new Assembly.ADD(Assembly.Register.R1, Assembly.Register.SP, Assembly.Register.R3));
 							program.Add(new Assembly.MOV(Assembly.Register.R2, new Assembly.ConstInt(field.Type.Size)));
 							program.Add(new Assembly.BL(genericSubroutines.Copy));
 
 							return (program, data, field.Type);
 						} else {
-							program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+							program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+							program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 
 							return (program, data, new PtrType(null, field.Type));
 						}
@@ -1927,7 +1987,8 @@ namespace Armlitian {
 						data.Add(new Assembly.String(stringEl.Content));
 
 						program.Add(new Assembly.MOV(Assembly.Register.R0, label));
-						program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+						program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+						program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 
 						return (program, data, new PtrType(null, types["char"]));
 					}
@@ -1935,7 +1996,8 @@ namespace Armlitian {
 				case CharElement charEl:
 					{
 						program.Add(new Assembly.MOV(Assembly.Register.R0, new Assembly.ConstInt((int)charEl.Content)));
-						program.Add(new Assembly.STRB(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+						program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(memoryStart)));
+						program.Add(new Assembly.STRB(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 
 						return (program, data, types["char"]);
 					}
@@ -2057,7 +2119,8 @@ namespace Armlitian {
 			foreach (Function f in functions.Values) {
 				program.Add(f.Label);
 
-				program.Add(new Assembly.STR(Assembly.Register.LR, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(f.ReturnType.Size))));
+				program.Add(new Assembly.MOV(Assembly.Register.R12, new Assembly.ConstInt(f.ReturnType.Size)));
+				program.Add(new Assembly.STR(Assembly.Register.LR, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, Assembly.Register.R12)));
 
 				var (subProgram, subData, _) = CompileExpression(genericSubroutines, types, functions, f, f.Parameters, f.Body, f.TotalParameterSize + f.ReturnType.Size + 4);
 
@@ -2146,7 +2209,7 @@ namespace Armlitian {
 
 				if (c == 'b') return result;
 
-				result += Convert.ToInt32(c) * powerLevel;
+				result += HexCharValue(c) * powerLevel;
 
 				powerLevel *= 2;
 			}
@@ -2223,18 +2286,23 @@ namespace Armlitian {
 				char c = script[i];
 
 				if (!inString) {
-					switch (c) {
-						case '{':
-							commentLevel++;
-							break;
-						case '}':
-							commentLevel--;
-							break;
+					if (c == '{') {
+						commentLevel++;
+						continue;
+					}
+
+					if (c == '}') {
+						commentLevel--;
+						continue;
 					}
 
 					if (commentLevel < 0) {
 						throw new Exception("extra end comment bracket");
 					}
+				}
+
+				if (commentLevel > 0) {
+					continue;
 				}
 
 				if ((((c == '"' || c == '\'') && !escaped) || !inString) && (c == '\n' || c == '\r' || c == ' ' || c == '\t' || c == '"' || c == '\'' || c == '[' || c == ']')) {

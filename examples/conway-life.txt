@@ -1,0 +1,95 @@
+{
+	This program runs a simulation of Conway's Game of Life with a 16x16 grid on a torus geometry.
+
+	This program proves that Armlitian as a programming language is Turing-complete, since Conway's Game of Life is also Turing-complete. It also demonstrates most of the functionality of the language.
+}
+
+[
+]
+
+[
+	[[int] cellAt [ [[ptr [array [int] 16]] board] [[int] x] [[int] y] ] [return [& [>> [$ [@@ $board [% [+ 16 $y] 16]]] [% [+ 16 $x] 16]] 1] ]]
+
+	[[void] main [] [do
+		[
+			[[array [int] 16] board]
+			[[array [int] 16] boardNew]
+			[[int] x]
+			[[int] y]
+			[[int] t]
+			[[int] currentNewLine]
+		]
+
+		[
+			[<- [@@ board 0	] 0b0000000000000000_0100000000000000]
+			[<- [@@ board 1	] 0b0000000000000000_0010000000000000]
+			[<- [@@ board 2	] 0b0000000000000000_1110000000000000]
+			[<- [@@ board 3	] 0b0000000000000000_0000000000000000]
+			[<- [@@ board 4	] 0b0000000000000000_0000000010000000]
+			[<- [@@ board 5	] 0b0000000000000000_0000000001000000]
+			[<- [@@ board 6	] 0b0000000000000000_0100000111000000]
+			[<- [@@ board 7	] 0b0000000000000000_0010000000000000]
+			[<- [@@ board 8	] 0b0000000000000000_1110000000000000]
+			[<- [@@ board 9	] 0b0000000000000000_0000000000000000]
+			[<- [@@ board 10] 0b0000000000000000_0000000011000000]
+			[<- [@@ board 11] 0b0000000000000000_0000000100100000]
+			[<- [@@ board 12] 0b0000000000000000_0000000011000000]
+			[<- [@@ board 13] 0b0000000000000000_0000000000000000]
+			[<- [@@ board 14] 0b0000000000000000_0000000000000000]
+			[<- [@@ board 15] 0b0000000000000000_0000000000000000]
+
+			[while 1 [do [
+				{ draw all the cells to the screen }
+				[<- y 0]
+				[while [< $y 16] [do [
+					[<- x 0]
+
+					[while [< $x 16] [do [
+						[<- [@ .PixelScreen [+ [- 15 $x] [* $y 64]]] [? [cellAt board $x $y] 0x00FF00 0xFF0000]]
+						[<- x [+ $x 1]]
+					]]]
+
+					[<- y [+ $y 1]]
+				]]]
+
+				{ compute the next stage of the simulation }
+				[<- y 0]
+				[while [< $y 16] [do [
+					[<- x 0]
+					[<- currentNewLine 0]
+
+					[while [< $x 16] [do [
+						[<- t [+
+							[cellAt board [- $x 1] [- $y 1]]
+							[cellAt board $x [- $y 1]]
+							[cellAt board [+ $x 1] [- $y 1]]
+
+							[cellAt board [- $x 1] $y]
+							[cellAt board [+ $x 1] $y]
+
+							[cellAt board [- $x 1] [+ $y 1]]
+							[cellAt board $x [+ $y 1]]
+							[cellAt board [+ $x 1] [+ $y 1]]
+						]]
+
+						[<- currentNewLine [| $currentNewLine [<< [|| [&& [cellAt board $x $y] [== $t 2]] [== $t 3]] $x]]]
+
+						[<- x [+ $x 1]]
+					]]]
+
+					[<- [@@ boardNew $y] $currentNewLine]
+
+					[<- y [+ $y 1]]
+				]]]
+
+				{ do useless computations so that the simulation is slower }
+				[<- x 40000]
+				[while [> $x 0] [<- x [- $x 1]]]
+
+				[<- board $boardNew]
+			]]]
+
+			[return]
+		]
+	]]
+]
