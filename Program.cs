@@ -7,6 +7,8 @@ namespace Armlitian {
 		CHAR,
 		INT,
 		FLOAT,
+		HEX,
+		BIN
 	}
 
 	public struct Token {
@@ -340,10 +342,11 @@ namespace Armlitian {
 			public static SpecialConstant WriteSignedNum = new SpecialConstant(".WriteSignedNum");
 			public static SpecialConstant WriteChar = new SpecialConstant(".WriteChar");
 			public static SpecialConstant WriteString = new SpecialConstant(".WriteString");
+			public static SpecialConstant PixelScreen = new SpecialConstant(".PixelScreen");
 
-			private string AssemblyRep;
+			public string AssemblyRep;
 
-			private SpecialConstant(string assemblyRep) {
+			public SpecialConstant(string assemblyRep) {
 				AssemblyRep = assemblyRep;
 			}
 
@@ -610,10 +613,10 @@ namespace Armlitian {
 
 		public class ADD : Instruction {
 			public Register Subject;
-			public Value A;
+			public Register A;
 			public Value B;
 
-			public ADD(Register subject, Value a, Value b) {
+			public ADD(Register subject, Register a, Value b) {
 				Subject = subject;
 				A = a;
 				B = b;
@@ -624,12 +627,92 @@ namespace Armlitian {
 			}
 		}
 
-		public class SUB : Instruction {
+		public class LSL : Instruction {
 			public Register Subject;
-			public Value A;
+			public Register A;
 			public Value B;
 
-			public SUB(Register subject, Value a, Value b) {
+			public LSL(Register subject, Register a, Value b) {
+				Subject = subject;
+				A = a;
+				B = b;
+			}
+
+			public override string ToAssembly() {
+				return $"LSL {Subject.ToAssembly()}, {A.ToAssembly()}, {B.ToAssembly()}";
+			}
+		}
+
+		public class LSR : Instruction {
+			public Register Subject;
+			public Register A;
+			public Value B;
+
+			public LSR(Register subject, Register a, Value b) {
+				Subject = subject;
+				A = a;
+				B = b;
+			}
+
+			public override string ToAssembly() {
+				return $"LSR {Subject.ToAssembly()}, {A.ToAssembly()}, {B.ToAssembly()}";
+			}
+		}
+
+		public class AND : Instruction {
+			public Register Subject;
+			public Register A;
+			public Value B;
+
+			public AND(Register subject, Register a, Value b) {
+				Subject = subject;
+				A = a;
+				B = b;
+			}
+
+			public override string ToAssembly() {
+				return $"AND {Subject.ToAssembly()}, {A.ToAssembly()}, {B.ToAssembly()}";
+			}
+		}
+
+		public class OR : Instruction {
+			public Register Subject;
+			public Register A;
+			public Value B;
+
+			public OR(Register subject, Register a, Value b) {
+				Subject = subject;
+				A = a;
+				B = b;
+			}
+
+			public override string ToAssembly() {
+				return $"OR {Subject.ToAssembly()}, {A.ToAssembly()}, {B.ToAssembly()}";
+			}
+		}
+
+		public class XOR : Instruction {
+			public Register Subject;
+			public Register A;
+			public Value B;
+
+			public XOR(Register subject, Register a, Value b) {
+				Subject = subject;
+				A = a;
+				B = b;
+			}
+
+			public override string ToAssembly() {
+				return $"XOR {Subject.ToAssembly()}, {A.ToAssembly()}, {B.ToAssembly()}";
+			}
+		}
+
+		public class SUB : Instruction {
+			public Register Subject;
+			public Register A;
+			public Value B;
+
+			public SUB(Register subject, Register a, Value b) {
 				Subject = subject;
 				A = a;
 				B = b;
@@ -663,6 +746,42 @@ namespace Armlitian {
 
 			public override string ToAssembly() {
 				return $"BEQ {JumpLabel.ToAssembly()}";
+			}
+		}
+
+		public class BNE : Instruction {
+			public Label JumpLabel;
+
+			public BNE(Label jumpLabel) {
+				JumpLabel = jumpLabel;
+			}
+
+			public override string ToAssembly() {
+				return $"BNE {JumpLabel.ToAssembly()}";
+			}
+		}
+
+		public class BGT : Instruction {
+			public Label JumpLabel;
+
+			public BGT(Label jumpLabel) {
+				JumpLabel = jumpLabel;
+			}
+
+			public override string ToAssembly() {
+				return $"BGT {JumpLabel.ToAssembly()}";
+			}
+		}
+
+		public class BLT : Instruction {
+			public Label JumpLabel;
+
+			public BLT(Label jumpLabel) {
+				JumpLabel = jumpLabel;
+			}
+
+			public override string ToAssembly() {
+				return $"BLT {JumpLabel.ToAssembly()}";
 			}
 		}
 
@@ -927,13 +1046,88 @@ namespace Armlitian {
 									program = program.Concat(subProgramVar).ToList();
 									data = data.Concat(subDataVar).ToList();
 
-									program.Add(new Assembly.ADD(Assembly.Register.R0, Assembly.Register.SP, new Assembly.ConstInt(memoryStart)));
 									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(varLocPosition))));
-									program.Add(new Assembly.MOV(Assembly.Register.R2, new Assembly.ConstInt(valueTypeVal.Size)));
-									program.Add(new Assembly.BL(genericSubroutines.Copy));
 
+									if (valueTypeVal is IntType || valueTypeVal is PtrType) {
+										program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+										program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.R1)));
+									} else {
+										program.Add(new Assembly.ADD(Assembly.Register.R0, Assembly.Register.SP, new Assembly.ConstInt(memoryStart)));
+										program.Add(new Assembly.MOV(Assembly.Register.R2, new Assembly.ConstInt(valueTypeVal.Size)));
+										program.Add(new Assembly.BL(genericSubroutines.Copy));
+									}
 
 									return (program, data, valueTypeVal);
+								}
+
+							case "if":
+								{
+									Assembly.Label endLabel = new();
+
+									for (int i = 1; i < listEl.Content.Count; i += 2) {
+										Assembly.Label skip = new();
+
+										if (i == listEl.Content.Count - 1) {
+											i--;
+										} else {
+											var (subProgramCond, subDataCond, valueTypeCond) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[i], memoryStart);
+
+											if (valueTypeCond is not IntType) {
+												throw new Exception("condition expression must return an integer");
+											}
+
+											program = program.Concat(subProgramCond).ToList();
+											data = data.Concat(subDataCond).ToList();
+
+											program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+											program.Add(new Assembly.CMP(Assembly.Register.R0, new Assembly.ConstInt(0)));
+											program.Add(new Assembly.BEQ(skip));
+										}
+
+										var (subProgramExp, subDataExp, _) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[i + 1], memoryStart);
+
+										program = program.Concat(subProgramExp).ToList();
+										data = data.Concat(subDataExp).ToList();
+
+										program.Add(new Assembly.B(endLabel));
+
+										program.Add(skip);
+									}
+
+									program.Add(endLabel);
+
+									return (program, data, types["void"]);
+								}
+
+							case "while":
+								{
+									Assembly.Label repeat = new();
+									Assembly.Label skip = new();
+
+									program.Add(repeat);
+
+									var (subProgramCond, subDataCond, valueTypeCond) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[1], memoryStart);
+
+									if (valueTypeCond is not IntType) {
+										throw new Exception("condition expression must return an integer");
+									}
+
+									var (subProgramExp, subDataExp, _) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[2], memoryStart);
+
+									program = program.Concat(subProgramCond).ToList();
+									data = data.Concat(subDataCond).ToList();
+
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.CMP(Assembly.Register.R0, new Assembly.ConstInt(0)));
+									program.Add(new Assembly.BEQ(skip));
+
+									program = program.Concat(subProgramExp).ToList();
+									data = data.Concat(subDataExp).ToList();
+
+									program.Add(new Assembly.B(repeat));
+									program.Add(skip);
+
+									return (program, data, types["void"]);
 								}
 
 							case "print":
@@ -999,6 +1193,129 @@ namespace Armlitian {
 									return (program, data, (Type)newType);
 								}
 
+							case "@":
+							case "@@":
+								{
+									var (subProgramPtr, subDataPtr, valueTypePtr) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[1], memoryStart);
+
+									if (valueTypePtr is not PtrType ptrType) {
+										throw new Exception("operators @ and @@ only works on a pointer and an int");
+									}
+
+									program = program.Concat(subProgramPtr).ToList();
+									data = data.Concat(subDataPtr).ToList();
+
+									var (subProgramInt, subDataInt, valueTypeInt) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[2], memoryStart + 4);
+
+									if (valueTypeInt is not IntType) {
+										throw new Exception("operators @ and @@ only works on a pointer and an int");
+									}
+
+									program = program.Concat(subProgramInt).ToList();
+									data = data.Concat(subDataInt).ToList();
+
+									Assembly.Label repeatLabel = new();
+									Assembly.Label endLabel = new();
+
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart + 4))));
+									program.Add(new Assembly.MOV(Assembly.Register.R2, new Assembly.ConstInt(ptrType.ValueType.Size)));
+									program.Add(repeatLabel);
+									program.Add(new Assembly.CMP(Assembly.Register.R2, new Assembly.ConstInt(0)));
+									program.Add(new Assembly.BEQ(endLabel));
+									program.Add(new Assembly.ADD(Assembly.Register.R0, Assembly.Register.R0, Assembly.Register.R1));
+									program.Add(new Assembly.SUB(Assembly.Register.R2, Assembly.Register.R2, new Assembly.ConstInt(1)));
+									program.Add(new Assembly.B(repeatLabel));
+									program.Add(endLabel);
+									program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+
+									if (opName == "@@") {
+										if (ptrType.ValueType is not ArrayType arrType) {
+											throw new Exception("@@ only works on array pointers");
+										}
+
+										return (program, data, new PtrType(null, arrType.ItemType));
+									} else {
+										return (program, data, new PtrType(null, ptrType.ValueType));
+									}
+								}
+
+							case "?":
+								{
+									var (subProgramCond, subDataCond, valueTypeCond) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[1], memoryStart);
+
+									if (valueTypeCond is not IntType) {
+										throw new Exception("only int types are allowed in a condition");
+									}
+
+									var (subProgramTrue, subDataTrue, valueTypeTrue) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[2], memoryStart);
+
+									var (subProgramFalse, subDataFalse, valueTypeFalse) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[3], memoryStart);
+
+									if (!Type.AreEqual(valueTypeTrue, valueTypeFalse)) {
+										throw new Exception("conditional operator return types must match");
+									}
+
+									program = program.Concat(subProgramCond).ToList();
+									data = data.Concat(subDataCond).ToList();
+
+									Assembly.Label isFalse = new();
+
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.CMP(Assembly.Register.R0, new Assembly.ConstInt(0)));
+									program.Add(new Assembly.BEQ(isFalse));
+
+									program = program.Concat(subProgramTrue).ToList();
+									data = data.Concat(subDataTrue).ToList();
+
+									program.Add(isFalse);
+
+									program = program.Concat(subProgramFalse).ToList();
+									data = data.Concat(subDataFalse).ToList();
+
+									return (program, data, valueTypeTrue);
+								}
+
+							case ".":
+								{
+									var (subProgram, subData, valueType) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[1], memoryStart);
+
+									if (valueType is not PtrType ptrType || ptrType.ValueType is not StructType structType) {
+										throw new Exception("operator . only works on struct pointers");
+									}
+
+									program = program.Concat(subProgram).ToList();
+									data = data.Concat(subData).ToList();
+
+									Field? structField = null;
+
+									int position = 0;
+
+									for (int i = 2; i < listEl.Content.Count; i++) {
+										structField = structType.Fields[((WordElement)listEl.Content[2]).Content];
+
+										position += ((Field)structField).Position;
+
+										if (i + 1 == listEl.Content.Count) break;
+
+										if (((Field)structField).Type is not StructType) {
+											throw new Exception("you need to learn how to use . correctly");
+										}
+
+										structType = (StructType)((Field)structField).Type;
+									}
+
+									if (structField == null) {
+										throw new Exception("idiot");
+									}
+
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.ADD(Assembly.Register.R0, Assembly.Register.R0, new Assembly.ConstInt(position)));
+									program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+
+									return (program, data, ((Field)structField).Type);
+								}
+
 							case "$":
 								{
 									var (subProgram, subData, valueType) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[1], memoryStart);
@@ -1018,41 +1335,544 @@ namespace Armlitian {
 									return (program, data, ptrType.ValueType);
 								}
 
-							default:
-								if (functions.ContainsKey(opName)) {
-									Function g = functions[opName];
+							case "+":
+								{
+									Assembly.Label add = new();
+									Assembly.Label allCompleted = new();
 
-									if (g.Parameters.Count != listEl.Content.Count + 1) {
-										throw new Exception("argument count mismatch");
-									}
+									for (int i = 1; i < listEl.Content.Count; i++) {
+										var (subProgram, subData, valueType) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[i], i == 1 ? memoryStart : memoryStart + 4);
 
-									{
-										int i = 1;
+										if (valueType is not IntType) {
+											throw new Exception("can only add integer types");
+										}
 
-										int position = memoryStart + g.ReturnType.Size + 4;
+										program = program.Concat(subProgram).ToList();
+										data = data.Concat(subData).ToList();
 
-										foreach (Field parameter in g.Parameters.Values) {
-											var (subProgram, subData, paramType) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[i], position);
-
-											if (!Type.AreEqual(paramType, parameter.Type)) {
-												throw new Exception("parameter type mismatch");
-											}
-
-											program = program.Concat(subProgram).ToList();
-											data = data.Concat(subData).ToList();
-
-											position += SizeToWordBytes(parameter.Type.Size);
-											i++;
+										if (i != 1) {
+											program.Add(new Assembly.BL(add));
 										}
 									}
 
-									program.Add(new Assembly.ADD(Assembly.Register.SP, Assembly.Register.SP, new Assembly.ConstInt(memoryStart)));
-									program.Add(new Assembly.BL(g.Label));
-									program.Add(new Assembly.SUB(Assembly.Register.SP, Assembly.Register.SP, new Assembly.ConstInt(memoryStart)));
+									program.Add(new Assembly.B(allCompleted));
 
-									return (program, data, g.ReturnType);
+									program.Add(add);
+
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart + 4))));
+
+									program.Add(new Assembly.ADD(Assembly.Register.R0, Assembly.Register.R0, Assembly.Register.R1));
+
+									program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+
+									program.Add(new Assembly.RET());
+
+									program.Add(allCompleted);
+
+									return (program, data, types["int"]);
 								}
-								break;
+
+							case "-":
+								{
+									Assembly.Label sub = new();
+									Assembly.Label allCompleted = new();
+
+									for (int i = 1; i < listEl.Content.Count; i++) {
+										var (subProgram, subData, valueType) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[i], i == 1 ? memoryStart : memoryStart + 4);
+
+										if (valueType is not IntType) {
+											throw new Exception("can only add integer types");
+										}
+
+										program = program.Concat(subProgram).ToList();
+										data = data.Concat(subData).ToList();
+
+										if (i != 1) {
+											program.Add(new Assembly.BL(sub));
+										}
+									}
+
+									program.Add(new Assembly.B(allCompleted));
+
+									program.Add(sub);
+
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart + 4))));
+
+									program.Add(new Assembly.SUB(Assembly.Register.R0, Assembly.Register.R0, Assembly.Register.R1));
+
+									program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+
+									program.Add(new Assembly.RET());
+
+									program.Add(allCompleted);
+
+									return (program, data, types["int"]);
+								}
+
+							case "*":
+								{
+									Assembly.Label multiply = new();
+									Assembly.Label allCompleted = new();
+
+									for (int i = 1; i < listEl.Content.Count; i++) {
+										var (subProgram, subData, valueType) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[i], i == 1 ? memoryStart : memoryStart + 4);
+
+										if (valueType is not IntType) {
+											throw new Exception("can only multiply integer types");
+										}
+
+										program = program.Concat(subProgram).ToList();
+										data = data.Concat(subData).ToList();
+
+										if (i != 1 && listEl.Content.Count > 3) {
+											program.Add(new Assembly.BL(multiply));
+										}
+									}
+
+									if (listEl.Content.Count > 2) {
+										if (listEl.Content.Count > 3) {
+											program.Add(new Assembly.B(allCompleted));
+										}
+
+										program.Add(multiply);
+
+										program.Add(new Assembly.MOV(Assembly.Register.R2, new Assembly.ConstInt(0)));
+										program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+										program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart + 4))));
+
+										Assembly.Label skipSignSwap = new();
+										Assembly.Label done = new();
+
+										program.Add(new Assembly.CMP(Assembly.Register.R1, new Assembly.ConstInt(0)));
+										program.Add(new Assembly.BGT(skipSignSwap));
+										program.Add(new Assembly.SUB(Assembly.Register.R0, Assembly.Register.R2, Assembly.Register.R0));
+										program.Add(new Assembly.SUB(Assembly.Register.R1, Assembly.Register.R2, Assembly.Register.R1));
+										program.Add(skipSignSwap);
+
+										Assembly.Label repeat = new();
+
+										program.Add(repeat);
+										program.Add(new Assembly.CMP(Assembly.Register.R1, new Assembly.ConstInt(0)));
+										program.Add(new Assembly.BEQ(done));
+										program.Add(new Assembly.ADD(Assembly.Register.R2, Assembly.Register.R2, Assembly.Register.R0));
+										program.Add(new Assembly.SUB(Assembly.Register.R1, Assembly.Register.R1, new Assembly.ConstInt(1)));
+										program.Add(new Assembly.B(repeat));
+										program.Add(done);
+
+										program.Add(new Assembly.STR(Assembly.Register.R2, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+
+										if (listEl.Content.Count > 3) {
+											program.Add(new Assembly.RET());
+
+											program.Add(allCompleted);
+										}
+									}
+
+									return (program, data, types["int"]);
+								}
+
+							case "<":
+							case ">":
+							case "<=":
+							case ">=":
+								{
+									var (subProgramA, subDataA, valueTypeA) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[1], memoryStart);
+
+									var (subProgramB, subDataB, valueTypeB) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[2], memoryStart + 4);
+
+									if (valueTypeA is not IntType || valueTypeB is not IntType) {
+										throw new Exception("can only compare integer types");
+									}
+
+									program = program.Concat(subProgramA).ToList();
+									data = data.Concat(subDataA).ToList();
+
+									program = program.Concat(subProgramB).ToList();
+									data = data.Concat(subDataB).ToList();
+
+									Assembly.Label skipFalse = new();
+
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart + 4))));
+
+									program.Add(new Assembly.CMP(Assembly.Register.R0, Assembly.Register.R1));
+
+									program.Add(new Assembly.MOV(Assembly.Register.R2, new Assembly.ConstInt(1)));
+
+									if (opName == "<" || opName == "<=") {
+										program.Add(new Assembly.BLT(skipFalse));
+									} else {
+										program.Add(new Assembly.BGT(skipFalse));
+									}
+
+									if (opName == "<=" || opName == ">=") {
+										program.Add(new Assembly.BEQ(skipFalse));
+									}
+
+									program.Add(new Assembly.MOV(Assembly.Register.R2, new Assembly.ConstInt(0)));
+									program.Add(skipFalse);
+
+									program.Add(new Assembly.STR(Assembly.Register.R2, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+
+									return (program, data, types["int"]);
+								}
+
+							case "&&":
+							case "||":
+								{
+									var (subProgramA, subDataA, valueTypeA) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[1], memoryStart);
+
+									var (subProgramB, subDataB, valueTypeB) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[2], memoryStart);
+
+									if (valueTypeA is not IntType || valueTypeB is not IntType) {
+										throw new Exception("can only perform logical operations on integer types");
+									}
+
+									program = program.Concat(subProgramA).ToList();
+									data = data.Concat(subDataA).ToList();
+
+									Assembly.Label skipB = new();
+
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.CMP(Assembly.Register.R0, new Assembly.ConstInt(0)));
+									program.Add(opName == "&&" ? new Assembly.BEQ(skipB) : new Assembly.BNE(skipB));
+
+									program = program.Concat(subProgramB).ToList();
+									data = data.Concat(subDataB).ToList();
+
+									program.Add(skipB);
+
+									return (program, data, types["int"]);
+								}
+
+							case "size_of":
+								{
+									Type? type = ConstructType(types, (ListElement)listEl.Content[1]);
+
+									if (type == null) {
+										throw new Exception("failed to resolve type in sizeof");
+									}
+
+									program.Add(new Assembly.MOV(Assembly.Register.R0, new Assembly.ConstInt(type.Size)));
+									program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+
+									return (program, data, types["int"]);
+								}
+
+							case "size_of_value":
+								{
+									var (_, _, type) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[1], memoryStart);
+
+									program.Add(new Assembly.MOV(Assembly.Register.R0, new Assembly.ConstInt(type.Size)));
+									program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+
+									return (program, data, types["int"]);
+								}
+
+							case "!":
+								{
+									var (subProgram, subData, valueType) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[1], memoryStart);
+
+									if (valueType is not IntType) {
+										throw new Exception("can only perform logical operations on integer types");
+									}
+
+									program = program.Concat(subProgram).ToList();
+									data = data.Concat(subData).ToList();
+
+									Assembly.Label skipTrue = new();
+
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.MOV(Assembly.Register.R1, new Assembly.ConstInt(1)));
+									program.Add(new Assembly.CMP(Assembly.Register.R0, new Assembly.ConstInt(0)));
+									program.Add(new Assembly.BEQ(skipTrue));
+									program.Add(new Assembly.MOV(Assembly.Register.R1, new Assembly.ConstInt(0)));
+									program.Add(skipTrue);
+									program.Add(new Assembly.STR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+
+									return (program, data, types["int"]);
+								}
+
+							case "&":
+							case "^":
+							case "|":
+								{
+									var (subProgramA, subDataA, valueTypeA) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[1], memoryStart);
+
+									var (subProgramB, subDataB, valueTypeB) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[2], memoryStart + 4);
+
+									if (valueTypeA is not IntType || valueTypeB is not IntType) {
+										throw new Exception("can only perform logical operations on integer types");
+									}
+
+									program = program.Concat(subProgramA).ToList();
+									data = data.Concat(subDataA).ToList();
+
+									program = program.Concat(subProgramB).ToList();
+									data = data.Concat(subDataB).ToList();
+
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart + 4))));
+
+									switch (opName) {
+										case "&":
+											program.Add(new Assembly.AND(Assembly.Register.R0, Assembly.Register.R0, Assembly.Register.R1));
+											break;
+										case "^":
+											program.Add(new Assembly.XOR(Assembly.Register.R0, Assembly.Register.R0, Assembly.Register.R1));
+											break;
+										case "|":
+											program.Add(new Assembly.OR(Assembly.Register.R0, Assembly.Register.R0, Assembly.Register.R1));
+											break;
+									}
+
+									program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+
+									return (program, data, types["int"]);
+								}
+
+							case "<<":
+							case ">>":
+							case ">>>":
+								{
+									var (subProgramA, subDataA, valueTypeA) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[1], memoryStart);
+
+									var (subProgramB, subDataB, valueTypeB) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[2], memoryStart + 4);
+
+									if (valueTypeA is not IntType || valueTypeB is not IntType) {
+										throw new Exception("can only perform logical shift operations on integer types");
+									}
+
+									program = program.Concat(subProgramA).ToList();
+									data = data.Concat(subDataA).ToList();
+
+									program = program.Concat(subProgramB).ToList();
+									data = data.Concat(subDataB).ToList();
+
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart + 4))));
+
+									if (opName == "<<") {
+										program.Add(new Assembly.LSL(Assembly.Register.R3, Assembly.Register.R0, Assembly.Register.R1));
+									} else {
+										program.Add(new Assembly.LSR(Assembly.Register.R3, Assembly.Register.R0, Assembly.Register.R1));
+
+										if (opName == ">>") {
+											program.Add(new Assembly.CMP(Assembly.Register.R3, new Assembly.ConstInt(0)));
+
+											Assembly.Label skipBitProp = new();
+
+											program.Add(new Assembly.BGT(skipBitProp));
+											program.Add(new Assembly.BEQ(skipBitProp));
+											program.Add(new Assembly.MOV(Assembly.Register.R2, new Assembly.ConstInt(-1)));
+											program.Add(new Assembly.XOR(Assembly.Register.R3, Assembly.Register.R3, Assembly.Register.R2));
+											program.Add(new Assembly.LSR(Assembly.Register.R2, Assembly.Register.R2, Assembly.Register.R1));
+											program.Add(new Assembly.XOR(Assembly.Register.R3, Assembly.Register.R3, Assembly.Register.R2));
+											program.Add(skipBitProp);
+										}
+									}
+
+									program.Add(new Assembly.STR(Assembly.Register.R3, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+
+									return (program, data, types["int"]);
+								}
+
+							case "!=":
+							case "==":
+								{
+									int trueValue = opName == "==" ? 1 : 0;
+									int falseValue = 1 - trueValue;
+
+									var (subProgramA, subDataA, valueTypeA) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[1], memoryStart);
+
+									var (subProgramB, subDataB, valueTypeB) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[2], memoryStart + SizeToWordBytes(valueTypeA.Size));
+
+									if (!Type.AreEqual(valueTypeA, valueTypeB)) {
+										throw new Exception("the types of two values must be equal if they are to be compared");
+									}
+
+									program = program.Concat(subProgramA).ToList();
+									data = data.Concat(subDataA).ToList();
+
+									program = program.Concat(subProgramB).ToList();
+									data = data.Concat(subDataB).ToList();
+
+									if (valueTypeA is VoidType) {
+										throw new Exception("cannot compare void types");
+									}
+
+									if (valueTypeA.Size == 0) {
+										program.Add(new Assembly.MOV(Assembly.Register.R0, new Assembly.ConstInt(trueValue)));
+										program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+
+										return (program, data, types["int"]);
+									}
+
+									if (valueTypeA.Size == 4) {
+										program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+										program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart + 4))));
+										program.Add(new Assembly.CMP(Assembly.Register.R0, Assembly.Register.R1));
+
+										Assembly.Label skipFalse = new();
+
+										program.Add(new Assembly.MOV(Assembly.Register.R2, new Assembly.ConstInt(trueValue)));
+										program.Add(new Assembly.BEQ(skipFalse));
+										program.Add(new Assembly.MOV(Assembly.Register.R2, new Assembly.ConstInt(falseValue)));
+										program.Add(skipFalse);
+										program.Add(new Assembly.STR(Assembly.Register.R2, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+
+										return (program, data, types["int"]);
+									}
+
+									program.Add(new Assembly.ADD(Assembly.Register.R2, Assembly.Register.SP, new Assembly.ConstInt(memoryStart)));
+									program.Add(new Assembly.MOV(Assembly.Register.R3, new Assembly.ConstInt(valueTypeA.Size)));
+
+									program.Add(new Assembly.MOV(Assembly.Register.R4, new Assembly.ConstInt(trueValue)));
+
+									Assembly.Label repeat = new();
+									Assembly.Label isFalse = new();
+									Assembly.Label exit = new();
+
+									program.Add(repeat);
+									program.Add(new Assembly.CMP(Assembly.Register.R3, new Assembly.ConstInt(0)));
+									program.Add(new Assembly.BEQ(exit));
+									program.Add(new Assembly.LDRB(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.R2)));
+									program.Add(new Assembly.LDRB(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.R2, new Assembly.ConstInt(SizeToWordBytes(valueTypeA.Size)))));
+									program.Add(new Assembly.CMP(Assembly.Register.R0, Assembly.Register.R1));
+									program.Add(new Assembly.BNE(isFalse));
+									program.Add(new Assembly.SUB(Assembly.Register.R3, Assembly.Register.R3, new Assembly.ConstInt(1)));
+									program.Add(new Assembly.B(repeat));
+
+									program.Add(isFalse);
+
+									program.Add(new Assembly.MOV(Assembly.Register.R4, new Assembly.ConstInt(falseValue)));
+
+									program.Add(exit);
+
+									program.Add(new Assembly.STR(Assembly.Register.R4, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+
+									return (program, data, types["int"]);
+								}
+
+							case "/":
+							case "%":
+								{
+									var (subProgramN, subDataN, valueTypeN) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[1], memoryStart);
+
+									if (valueTypeN is not IntType) {
+										throw new Exception("division only works on integers");
+									}
+
+									program = program.Concat(subProgramN).ToList();
+									data = data.Concat(subDataN).ToList();
+
+									var (subProgramD, subDataD, valueTypeD) = CompileExpression(genericSubroutines, types, functions, f, variables, new ListElement(new List<Element> {new WordElement("*")}.Concat(listEl.Content.Skip(2).ToList()).ToList()), memoryStart + 4);
+
+									program = program.Concat(subProgramD).ToList();
+									data = data.Concat(subDataD).ToList();
+
+									program.Add(new Assembly.LDR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									program.Add(new Assembly.LDR(Assembly.Register.R1, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart + 4))));
+
+									Assembly.Label skipSignSwapN = new();
+
+									program.Add(new Assembly.MOV(Assembly.Register.R2, new Assembly.ConstInt(0)));
+									program.Add(new Assembly.MOV(Assembly.Register.R3, new Assembly.ConstInt(0)));
+
+									program.Add(new Assembly.CMP(Assembly.Register.R0, new Assembly.ConstInt(0)));
+									program.Add(new Assembly.BGT(skipSignSwapN));
+									program.Add(new Assembly.SUB(Assembly.Register.R0, Assembly.Register.R2, Assembly.Register.R0));
+									program.Add(new Assembly.MOV(Assembly.Register.R3, new Assembly.ConstInt(1)));
+									program.Add(skipSignSwapN);
+
+									if (opName == "/") {
+										Assembly.Label skipSignSwapD = new();
+
+										program.Add(new Assembly.CMP(Assembly.Register.R1, new Assembly.ConstInt(0)));
+										program.Add(new Assembly.BGT(skipSignSwapD));
+										program.Add(new Assembly.SUB(Assembly.Register.R1, Assembly.Register.R2, Assembly.Register.R1));
+										program.Add(new Assembly.SUB(Assembly.Register.R3, Assembly.Register.R3, new Assembly.ConstInt(1)));
+										program.Add(skipSignSwapD);
+									}
+
+									Assembly.Label repeat = new();
+									Assembly.Label end = new();
+
+									program.Add(repeat);
+
+									program.Add(new Assembly.CMP(Assembly.Register.R0, Assembly.Register.R1));
+									program.Add(new Assembly.BLT(end));
+
+									program.Add(new Assembly.SUB(Assembly.Register.R0, Assembly.Register.R0, Assembly.Register.R1));
+
+									if (opName == "/") {
+										program.Add(new Assembly.ADD(Assembly.Register.R2, Assembly.Register.R2, new Assembly.ConstInt(1)));
+									}
+
+									program.Add(new Assembly.B(repeat));
+
+									program.Add(end);
+
+									Assembly.Label skipResultSignFlip = new();
+
+									if (opName == "/") {
+										program.Add(new Assembly.CMP(Assembly.Register.R3, new Assembly.ConstInt(0)));
+										program.Add(new Assembly.BEQ(skipResultSignFlip));
+										program.Add(new Assembly.MOV(Assembly.Register.R3, new Assembly.ConstInt(0)));
+										program.Add(new Assembly.SUB(Assembly.Register.R2, Assembly.Register.R3, Assembly.Register.R2));
+										program.Add(skipResultSignFlip);
+										program.Add(new Assembly.STR(Assembly.Register.R2, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									} else {
+										program.Add(new Assembly.CMP(Assembly.Register.R3, new Assembly.ConstInt(0)));
+										program.Add(new Assembly.BEQ(skipResultSignFlip));
+										program.Add(new Assembly.MOV(Assembly.Register.R3, new Assembly.ConstInt(0)));
+										program.Add(new Assembly.SUB(Assembly.Register.R0, Assembly.Register.R3, Assembly.Register.R0));
+										program.Add(skipResultSignFlip);
+										program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+									}
+
+									return (program, data, types["int"]);
+								}
+
+							default:
+								{
+									if (functions.ContainsKey(opName)) {
+										Function g = functions[opName];
+
+										if (g.Parameters.Count + 1 != listEl.Content.Count) {
+											throw new Exception("argument count mismatch");
+										}
+
+										{
+											int i = 1;
+
+											int position = memoryStart + g.ReturnType.Size + 4;
+
+											foreach (Field parameter in g.Parameters.Values) {
+												var (subProgram, subData, paramType) = CompileExpression(genericSubroutines, types, functions, f, variables, listEl.Content[i], position);
+
+												if (!Type.AreEqual(paramType, parameter.Type)) {
+													throw new Exception("parameter type mismatch");
+												}
+
+												program = program.Concat(subProgram).ToList();
+												data = data.Concat(subData).ToList();
+
+												position += SizeToWordBytes(parameter.Type.Size);
+												i++;
+											}
+										}
+
+										program.Add(new Assembly.ADD(Assembly.Register.SP, Assembly.Register.SP, new Assembly.ConstInt(memoryStart)));
+										program.Add(new Assembly.BL(g.Label));
+										program.Add(new Assembly.SUB(Assembly.Register.SP, Assembly.Register.SP, new Assembly.ConstInt(memoryStart)));
+
+										return (program, data, g.ReturnType);
+									}
+									break;
+								}
 						}
 
 						throw new Exception("no operator or function found with name " + opName);
@@ -1065,6 +1885,23 @@ namespace Armlitian {
 
 				case WordElement wordEl:
 					{
+						if (wordEl.Content.StartsWith(".")) {
+							Assembly.SpecialConstant c;
+							Type t;
+
+							switch (wordEl.Content) {
+								default:
+									c = new Assembly.SpecialConstant(wordEl.Content);
+									t = types["int"];
+									break;
+							}
+
+							program.Add(new Assembly.MOV(Assembly.Register.R0, c));
+							program.Add(new Assembly.STR(Assembly.Register.R0, new Assembly.IndexedMemoryLocation(Assembly.Register.SP, new Assembly.ConstInt(memoryStart))));
+
+							return (program, data, new PtrType(null, t));
+						}
+
 						Field field = variables[wordEl.Content.StartsWith("$") ? wordEl.Content.Substring(1) : wordEl.Content];
 
 						program.Add(new Assembly.ADD(Assembly.Register.R0, Assembly.Register.SP, new Assembly.ConstInt(field.Position)));
@@ -1237,13 +2074,16 @@ namespace Armlitian {
 			{
 				Assembly.Label? oldLabel = null;
 
-				foreach (Assembly.Line line in program) {
+				for (int i = 0; i < program.Count; i++) {
+					Assembly.Line line = program[i];
+
 					if (line is Assembly.Label label) {
 						if (oldLabel == null) {
 							oldLabel = label;
 						} else {
 							label.ID = oldLabel.ID;
-							program.Remove(label);
+							program.RemoveAt(i);
+							i--;
 						}
 					} else {
 						oldLabel = null;
@@ -1274,6 +2114,46 @@ namespace Armlitian {
 			throw new Exception("unrecognised hex digit");
 		}
 
+		private static int HexToInt(string hex) {
+			int result = 0;
+
+			int powerLevel = 1;
+
+			for (int i = hex.Length - 1; i >= 0; i--) {
+				char c = hex[i];
+
+				if (c == '_') continue;
+
+				if (c == 'x') return result;
+
+				result += HexCharValue(c) * powerLevel;
+
+				powerLevel *= 16;
+			}
+
+			throw new Exception("failed to parse hex string");
+		}
+
+		private static int BinToInt(string bin) {
+			int result = 0;
+
+			int powerLevel = 1;
+
+			for (int i = bin.Length - 1; i >= 0; i--) {
+				char c = bin[i];
+
+				if (c == '_') continue;
+
+				if (c == 'b') return result;
+
+				result += Convert.ToInt32(c) * powerLevel;
+
+				powerLevel *= 2;
+			}
+
+			throw new Exception("failed to parse hex string");
+		}
+
 		public static (ListElement result, int index) Parse(List<Token> tokens, int i = 0) {
 			ListElement root = new ListElement(new List<Element>());
 
@@ -1291,6 +2171,14 @@ namespace Armlitian {
 
 					case TokenType.FLOAT:
 						root.Content.Add(new FloatElement(Convert.ToSingle(token.Content)));
+						break;
+
+					case TokenType.HEX:
+						root.Content.Add(new IntElement(HexToInt(token.Content)));
+						break;
+
+					case TokenType.BIN:
+						root.Content.Add(new IntElement(BinToInt(token.Content)));
 						break;
 
 					case TokenType.STRING:
@@ -1426,15 +2314,37 @@ namespace Armlitian {
 								}
 								break;
 
+							case '_':
+								if (currentToken.Type == TokenType.WHITESPACE) {
+									currentToken.Type = TokenType.WORD;
+								}
+								break;
+
+							case 'x':
+								if (currentToken.Type == TokenType.INT) {
+									currentToken.Type = TokenType.HEX;
+								} else {
+									currentToken.Type = TokenType.WORD;
+								}
+								break;
+
+							case 'b':
+								if (currentToken.Type == TokenType.INT) {
+									currentToken.Type = TokenType.BIN;
+								} else {
+									currentToken.Type = TokenType.WORD;
+								}
+								break;
+
 							default:
 								if (IsNumberCharacter(c)) {
 									if (currentToken.Type == TokenType.WHITESPACE || currentToken.Type == TokenType.INT) {
 										currentToken.Type = TokenType.INT;
-									} else if (currentToken.Type == TokenType.FLOAT) {
+									} else if (currentToken.Type == TokenType.FLOAT || currentToken.Type == TokenType.HEX || currentToken.Type == TokenType.BIN) {
 									} else {
 										currentToken.Type = TokenType.WORD;
 									}
-								} else {
+								} else if (currentToken.Type != TokenType.HEX) {
 									currentToken.Type = TokenType.WORD;
 								}
 								break;
@@ -1451,24 +2361,13 @@ namespace Armlitian {
 
 	public static class Program {
 		public static void Main(string[] args) {
-			List<Token> tokens = Compilation.Lex(@"
-					[
-					]
+			if (args.Length != 1) {
+				throw new Exception("you must specify a code file to compile");
+			}
 
-					[
-						[[void] main [] [do
-							[
-								[[char] x]
-							]
+			string script = new System.IO.StreamReader(args[0]).ReadToEnd();
 
-							[
-								[<- x 'b']
-								[print $x]
-								[return]
-							]
-						]]
-					]
-					");
+			List<Token> tokens = Compilation.Lex(script);
 
 			(ListElement parsed, _) = Compilation.Parse(tokens);
 
